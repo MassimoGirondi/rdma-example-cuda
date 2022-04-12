@@ -110,7 +110,7 @@ struct ibv_mr* rdma_buffer_alloc(struct ibv_pd *pd,
  * calling rdma_buffer_alloc();
  * @mr: RDMA memory region to free 
  */
-void rdma_buffer_free(struct ibv_mr *mr);
+void rdma_buffer_free(struct ibv_mr *mr, int gpu_index);
 
 /* This function registers a previously allocated memory. Returns a memory region 
  * (MR) identifier or NULL on error.

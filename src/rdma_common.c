@@ -151,7 +151,7 @@ struct ibv_mr *rdma_buffer_register(struct ibv_pd *pd,
 	return mr;
 }
 
-void rdma_buffer_free(struct ibv_mr *mr) 
+void rdma_buffer_free(struct ibv_mr *mr, int gpu_index) 
 {
 	if (!mr) {
 		rdma_error("Passed memory region is NULL, ignoring\n");
@@ -160,7 +160,12 @@ void rdma_buffer_free(struct ibv_mr *mr)
 	void *to_free = mr->addr;
 	rdma_buffer_deregister(mr);
 	debug("Buffer %p free'ed\n", to_free);
-	free(to_free);
+#if CUDA
+    if (gpu_index >= 0)
+        cudaFree(to_free);
+    else
+#endif
+	    free(to_free);
 }
 
 void rdma_buffer_deregister(struct ibv_mr *mr) 

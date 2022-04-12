@@ -26,6 +26,7 @@ static struct rdma_buffer_attr client_metadata_attr, server_metadata_attr;
 static struct ibv_recv_wr client_recv_wr, *bad_client_recv_wr = NULL;
 static struct ibv_send_wr server_send_wr, *bad_server_send_wr = NULL;
 static struct ibv_sge client_recv_sge, server_send_sge;
+int gpu_index = -1;
 
 /* When we call this function cm_client_id must be set to a valid identifier.
  * This is where, we prepare client connection before we accept it. This 
@@ -276,7 +277,7 @@ static int accept_client_connection()
 }
 
 /* This function sends server side buffer metadata to the connected client */
-static int send_server_metadata_to_client(int gpu_index) 
+static int send_server_metadata_to_client() 
 {
 	struct ibv_wc wc;
 	int ret = -1;
@@ -403,7 +404,7 @@ static int disconnect_and_cleanup()
 		// we continue anyways;
 	}
 	/* Destroy memory buffers */
-	rdma_buffer_free(server_buffer_mr);
+	rdma_buffer_free(server_buffer_mr, gpu_index);
 	rdma_buffer_deregister(server_metadata_mr);	
 	rdma_buffer_deregister(client_metadata_mr);	
 	/* Destroy protection domain */
@@ -439,7 +440,6 @@ int main(int argc, char **argv)
 {
 	int ret, option;
 	struct sockaddr_in server_sockaddr;
-    int gpu_index = -1;
 	bzero(&server_sockaddr, sizeof server_sockaddr);
 	server_sockaddr.sin_family = AF_INET; /* standard IP NET address */
 	server_sockaddr.sin_addr.s_addr = htonl(INADDR_ANY); /* passed address */
@@ -493,7 +493,7 @@ int main(int argc, char **argv)
 		rdma_error("Failed to handle client cleanly, ret = %d \n", ret);
 		return ret;
 	}
-	ret = send_server_metadata_to_client(gpu_index);
+	ret = send_server_metadata_to_client();
 	if (ret) {
 		rdma_error("Failed to send server metadata to the client, ret = %d \n", ret);
 		return ret;
