@@ -49,3 +49,22 @@ atr@atr:~/rdma-example$
 
 ## Does not have an RDMA device?
 In case you do not have an RDMA device to test the code, you can setup SofitWARP software RDMA device on your Linux machine. Follow instructions here: [https://github.com/animeshtrivedi/blog/blob/master/post/2019-06-26-siw.md](https://github.com/animeshtrivedi/blog/blob/master/post/2019-06-26-siw.md).
+
+# CUDA Support
+
+This can be used to test GPU direct support on your hardware!
+
+Compile with `-DCUDA=1`, the server should be compiled through the Nvidia toolchain, and linked to CUDA libraries (which must be installed beforehand). You also probably need OFED and a Mellanox adapter.
+
+Then the `-g 0` flag will instruct the server to allocate memory on the GPU, instead of a standard RAM region.
+
+## How to check that the CUDA driver is doing its job
+
+Instead  of using the `nvidia_peermem` driver shipped with the recent driver releases, you can use [`nv_peer_memory`](https://github.com/Mellanox/nv_peer_memory), an older but almost equivalent version of the driver.
+Before compiling change line 59 of `nv_peer_mem.c` to print messages, or use the following:
+
+```
+sed -i "s/enable_dbg = 0/ebable_dbg = 1//"  nv_peer_mem.c
+```
+
+Then compile it with `make -j` and load with `sudo insmod nv_peer_mem.ko`. Observe the kernel messages with `sudo dmesg -w` and you should spot operations linked to this module.
