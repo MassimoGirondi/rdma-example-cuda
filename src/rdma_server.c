@@ -9,6 +9,8 @@
 
 #include "rdma_common.h"
 
+
+
 /* These are the RDMA resources needed to setup an RDMA connection */
 /* Event channel, where connection management (cm) related events are relayed */
 static struct rdma_event_channel *cm_event_channel = NULL;
@@ -274,7 +276,7 @@ static int accept_client_connection()
 }
 
 /* This function sends server side buffer metadata to the connected client */
-static int send_server_metadata_to_client() 
+static int send_server_metadata_to_client(int gpu_index) 
 {
 	struct ibv_wc wc;
 	int ret = -1;
@@ -299,7 +301,8 @@ static int send_server_metadata_to_client()
 		       client_metadata_attr.length /* what size to allocate */, 
 		       (IBV_ACCESS_LOCAL_WRITE|
 		       IBV_ACCESS_REMOTE_READ|
-		       IBV_ACCESS_REMOTE_WRITE) /* access permissions */);
+		       IBV_ACCESS_REMOTE_WRITE) /* access permissions */,
+               gpu_index);
        if(!server_buffer_mr){
 	       rdma_error("Server failed to create a buffer \n");
 	       /* we assume that it is due to out of memory error */
@@ -424,8 +427,11 @@ static int disconnect_and_cleanup()
 void usage() 
 {
 	printf("Usage:\n");
-	printf("rdma_server: [-a <server_addr>] [-p <server_port>]\n");
+	printf("rdma_server: [-a <server_addr>] [-p <server_port>] [-g <use_gpu>] \n");
 	printf("(default port is %d)\n", DEFAULT_RDMA_PORT);
+#if CUDA
+	printf("CUDA GPU to use. Default is -1 (do not use any). The first GPU usually have id 0)\n");
+#endif
 	exit(1);
 }
 
@@ -433,11 +439,12 @@ int main(int argc, char **argv)
 {
 	int ret, option;
 	struct sockaddr_in server_sockaddr;
+    int gpu_index = -1;
 	bzero(&server_sockaddr, sizeof server_sockaddr);
 	server_sockaddr.sin_family = AF_INET; /* standard IP NET address */
 	server_sockaddr.sin_addr.s_addr = htonl(INADDR_ANY); /* passed address */
 	/* Parse Command Line Arguments, not the most reliable code */
-	while ((option = getopt(argc, argv, "a:p:")) != -1) {
+	while ((option = getopt(argc, argv, "a:p:g:")) != -1) {
 		switch (option) {
 			case 'a':
 				/* Remember, this will overwrite the port info */
@@ -451,6 +458,15 @@ int main(int argc, char **argv)
 				/* passed port to listen on */
 				server_sockaddr.sin_port = htons(strtol(optarg, NULL, 0)); 
 				break;
+#if CUDA
+            case 'g':
+                gpu_index = strtol(optarg, NULL, 0);
+                if (gpu_index >= 0 && ! CUDA){
+                    printf("CUDA was not enabled. Compile with -DCUDA=1\n");
+                    exit(1);
+                }
+                break;
+#endif
 			default:
 				usage();
 				break;
@@ -460,6 +476,8 @@ int main(int argc, char **argv)
 		/* If still zero, that mean no port info provided */
 		server_sockaddr.sin_port = htons(DEFAULT_RDMA_PORT); /* use default port */
 	 }
+    if (gpu_index >= 0)
+        init_gpu(gpu_index);
 	ret = start_rdma_server(&server_sockaddr);
 	if (ret) {
 		rdma_error("RDMA server failed to start cleanly, ret = %d \n", ret);
@@ -475,7 +493,7 @@ int main(int argc, char **argv)
 		rdma_error("Failed to handle client cleanly, ret = %d \n", ret);
 		return ret;
 	}
-	ret = send_server_metadata_to_client();
+	ret = send_server_metadata_to_client(gpu_index);
 	if (ret) {
 		rdma_error("Failed to send server metadata to the client, ret = %d \n", ret);
 		return ret;

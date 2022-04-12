@@ -1,0 +1,3 @@
+[submodule "nv_peer_memory"]
+	path = nv_peer_memory
+	url = https://github.com/Mellanox/nv_peer_memory.git

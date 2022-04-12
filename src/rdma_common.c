@@ -3,9 +3,57 @@
  *
  * Authors: Animesh Trivedi
  *          atrivedi@apache.org 
+ *          CUDA support by Massimo Girondi
+ *          massimo@girondi.net
  */
 
 #include "rdma_common.h"
+
+
+
+int init_gpu(int gpu_index)
+{
+#if CUDA
+    CUresult ret = cuInit(0);
+    if (ret != cudaSuccess) {
+        cudaError_t err = cudaGetLastError();
+        printf("Error while initializing CUDA: %s\n", cudaGetErrorString(err));
+        exit(ret);
+    }
+
+    CUdevice device;
+    ret = cuDeviceGet(&device,gpu_index);
+    if (ret != cudaSuccess) {
+        cudaError_t err = cudaGetLastError();
+        printf("Error while initializing CUDA: %s\n", cudaGetErrorString(err));
+        return ret;
+    }
+    // cudaError_t err= cudaSetDevice(gpu_index);
+    // if (err != cudaSuccess) {
+    //     printf("Error while initializing CUDA: %s\n", cudaGetErrorString(err));
+    //     exit(ret);
+    // }
+
+
+    CUcontext context;
+    ret = cuCtxCreate(&context,0,device);
+    if (ret != cudaSuccess) {
+        cudaError_t err = cudaGetLastError();
+        printf("Error while initializing CUDA: %s\n", cudaGetErrorString(err));
+        return ret;
+    }
+
+
+    printf("CUDA initialized succesfully\n");
+    return ret;
+
+#else
+    printf("CUDA is not supported in this program!\n");
+    exit(1);
+    return 1;
+#endif
+}
+
 
 void show_rdma_cmid(struct rdma_cm_id *id)
 {
@@ -38,14 +86,38 @@ void show_rdma_buffer_attr(struct rdma_buffer_attr *attr){
 }
 
 struct ibv_mr* rdma_buffer_alloc(struct ibv_pd *pd, uint32_t size,
-    enum ibv_access_flags permission) 
+    enum ibv_access_flags permission, int gpu_index) 
 {
 	struct ibv_mr *mr = NULL;
 	if (!pd) {
 		rdma_error("Protection domain is NULL \n");
 		return NULL;
 	}
-	void *buf = calloc(1, size);
+    void *buf;
+#if CUDA
+    if (gpu_index != -1){
+        CUdeviceptr ptr;
+        int ret = cuMemAlloc(&ptr, size);
+        unsigned int flags = 1;
+        if (ptr == 0 || ret)
+        {
+            printf("ptr is %p, ret is %i\n", ptr,ret );
+            cudaError_t err = cudaGetLastError();
+            printf("Error while allocating CUDA memory: %s\n", cudaGetErrorString(err));
+            return NULL;
+        }
+        ret = cuPointerSetAttribute(&flags, CU_POINTER_ATTRIBUTE_SYNC_MEMOPS, ptr);
+        if (ret)
+        {
+            rdma_error("Error while setting memory attributes\n");
+            return NULL;
+        }
+        buf = ptr;
+    }
+    else
+#endif
+	    buf = calloc(1, size);
+
 	if (!buf) {
 		rdma_error("failed to allocate buffer, -ENOMEM\n");
 		return NULL;

@@ -43,6 +43,16 @@
 
 #endif /* ACN_RDMA_DEBUG */
 
+
+#ifndef CUDA
+#define CUDA 0
+#endif
+#if CUDA
+#include <cuda.h>
+#include <cuda_runtime.h>
+#endif
+
+
 /* Capacity of the completion queue (CQ) */
 #define CQ_CAPACITY (16)
 /* MAX SGE capacity */
@@ -89,11 +99,12 @@ int process_rdma_cm_event(struct rdma_event_channel *echannel,
  * identifier or NULL on error. 
  * @pd: Protection domain where the buffer should be allocated 
  * @length: Length of the buffer 
+ * @gpu_index: Use CUDA memory
  * @permission: OR of IBV_ACCESS_* permissions as defined for the enum ibv_access_flags
  */
 struct ibv_mr* rdma_buffer_alloc(struct ibv_pd *pd, 
 		uint32_t length, 
-		enum ibv_access_flags permission);
+		enum ibv_access_flags permission, int gpu_index);
 
 /* Frees a previously allocated RDMA buffer. The buffer must be allocated by 
  * calling rdma_buffer_alloc();
@@ -129,5 +140,7 @@ int process_work_completion_events(struct ibv_comp_channel *comp_channel,
 
 /* prints some details from the cm id */
 void show_rdma_cmid(struct rdma_cm_id *id);
+
+int init_gpu(int gpu_index);
 
 #endif /* RDMA_COMMON_H */
